@@ -48,6 +48,14 @@ const onRegisterDevice = (data) => {
     }
 };
 
+const loadFromNotification = async (notification) => {
+    await store.dispatch(loadFromPushNotification(notification));
+    if (!app.startAppFromPushNotification) {
+        EventEmitter.emit(ViewTypes.NOTIFICATION_TAPPED);
+        PushNotifications.resetNotification();
+    }
+};
+
 const onPushNotification = async (deviceNotification) => {
     const {dispatch, getState} = store;
 
@@ -77,11 +85,17 @@ const onPushNotification = async (deviceNotification) => {
         } else if (userInteraction && !notification.localNotification) {
             EventEmitter.emit('close_channel_drawer');
             if (getState().views.root.hydrationComplete) {
-                await dispatch(loadFromPushNotification(notification));
-                if (!app.startAppFromPushNotification) {
-                    EventEmitter.emit(ViewTypes.NOTIFICATION_TAPPED);
-                    PushNotifications.resetNotification();
-                }
+                loadFromNotification(notification);
+            } else {
+                const waitForHydration = () => {
+                    if (getState().views.root.hydrationComplete) {
+                        loadFromNotification(notification);
+
+                        store.unsubscribe(waitForHydration);
+                    }
+                };
+
+                store.subscribe(waitForHydration);
             }
         }
     }
